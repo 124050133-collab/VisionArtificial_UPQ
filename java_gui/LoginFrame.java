@@ -88,8 +88,12 @@ public class LoginFrame extends JFrame {
 
             if (respuesta != null && respuesta.contains("\"status\": \"ok\"")) {
                 JOptionPane.showMessageDialog(this, "¡Bienvenido al Sistema!", "Éxito", JOptionPane.INFORMATION_MESSAGE);
-                // Abrir pantalla principal (A continuación la crearemos)
-                this.dispose();
+                
+                // --- LÍNEA CLAVE: Abre la ventana principal ---
+                new MainFrame().setVisible(true);
+                
+                // Cierra la ventana de Login actual
+                this.dispose(); 
             } else {
                 JOptionPane.showMessageDialog(this, "Credenciales incorrectas.", "Error", JOptionPane.ERROR_MESSAGE);
             }

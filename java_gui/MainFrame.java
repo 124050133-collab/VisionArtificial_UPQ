@@ -2,8 +2,6 @@ package java_gui;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
@@ -45,16 +43,10 @@ public class MainFrame extends JFrame {
         lblImagen.setBorder(BorderFactory.createLineBorder(Color.GRAY));
         add(lblImagen, BorderLayout.CENTER);
 
-        // Evento Buscar Foto
+        // Eventos con expresiones lambda (sin necesidad de ActionListener explícito)
         btnBuscar.addActionListener(e -> buscarFotoLocal());
-
-        // Evento Cámara Web
         btnCamara.addActionListener(e -> tomarFotoCamara());
-
-        // Evento Limpiar
         btnLimpiar.addActionListener(e -> limpiarVista());
-
-        // Evento Ir a Preprocesamiento
         btnProcesar.addActionListener(e -> abrirPreprocesamiento());
     }
 
@@ -107,5 +99,11 @@ public class MainFrame extends JFrame {
             return;
         }
         new ProcessFrame(rutaImagenActual).setVisible(true);
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            new MainFrame().setVisible(true);
+        });
     }
 }
