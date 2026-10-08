@@ -66,6 +66,11 @@ public class ProcessFrame extends JFrame {
         btnSepararCapas.addActionListener(e -> mostrarCapas());
     }
 
+    private String normalizarRuta(String ruta) {
+        if (ruta == null || ruta.isEmpty()) return "";
+        return new File(ruta).getAbsolutePath().replace("\\", "/");
+    }
+
     private void aplicarProceso() {
         String seleccion = (String) comboFiltros.getSelectedItem();
         if ("Original".equals(seleccion)) {
@@ -75,53 +80,86 @@ public class ProcessFrame extends JFrame {
         }
 
         try {
-            String rutaSalida = "temp_procesada.jpg";
+            String rutaOrigenAbs = normalizarRuta(rutaImagenOriginal);
+            String rutaSalidaAbs = normalizarRuta("temp_procesada.jpg");
             double valGamma = sliderGamma.getValue() / 10.0;
-            
+
             ProcessBuilder pb = new ProcessBuilder(
-                PYTHON_PATH, BRIDGE_PATH, "procesar", 
-                rutaImagenOriginal, seleccion, rutaSalida, String.valueOf(valGamma)
+                PYTHON_PATH, 
+                BRIDGE_PATH, 
+                "procesar", 
+                rutaOrigenAbs, 
+                seleccion, 
+                rutaSalidaAbs, 
+                String.valueOf(valGamma)
             );
-            
+
             Process p = pb.start();
+
             BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            BufferedReader errorReader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+
             String respuesta = reader.readLine();
 
+            StringBuilder sbError = new StringBuilder();
+            String errLine;
+            while ((errLine = errorReader.readLine()) != null) {
+                sbError.append(errLine).append("\n");
+            }
+
             if (respuesta != null && respuesta.contains("\"status\": \"ok\"")) {
-                rutaImagenProcesada = new File(rutaSalida).getAbsolutePath();
+                rutaImagenProcesada = rutaSalidaAbs;
                 mostrarImagen(rutaImagenProcesada);
             } else {
-                JOptionPane.showMessageDialog(this, "Error al aplicar filtro.", "Error", JOptionPane.ERROR_MESSAGE);
+                String detalle = sbError.length() > 0 ? sbError.toString() : (respuesta != null ? respuesta : "Sin respuesta de Python");
+                JOptionPane.showMessageDialog(this, "Error de Python:\n" + detalle, "Error al Aplicar Filtro", JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Error en Java: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void guardarEnBaseDatos() {
         try {
+            String rutaProcesadaAbs = normalizarRuta(rutaImagenProcesada);
             String tipo = (String) comboFiltros.getSelectedItem();
-            ProcessBuilder pb = new ProcessBuilder(PYTHON_PATH, BRIDGE_PATH, "guardar_bd", rutaImagenProcesada, tipo);
+
+            ProcessBuilder pb = new ProcessBuilder(PYTHON_PATH, BRIDGE_PATH, "guardar_bd", rutaProcesadaAbs, tipo);
             Process p = pb.start();
+
             BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            BufferedReader errorReader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+
             String respuesta = reader.readLine();
+
+            StringBuilder sbError = new StringBuilder();
+            String errLine;
+            while ((errLine = errorReader.readLine()) != null) {
+                sbError.append(errLine).append("\n");
+            }
 
             if (respuesta != null && respuesta.contains("\"status\": \"ok\"")) {
                 JOptionPane.showMessageDialog(this, "Imagen descompuesta y guardada correctamente en BD por píxel (RGB).", "Éxito", JOptionPane.INFORMATION_MESSAGE);
             } else {
-                JOptionPane.showMessageDialog(this, "Error al guardar en la BD.", "Error", JOptionPane.ERROR_MESSAGE);
+                String detalle = sbError.length() > 0 ? sbError.toString() : (respuesta != null ? respuesta : "Sin respuesta de Python");
+                JOptionPane.showMessageDialog(this, "Error al guardar en BD:\n" + detalle, "Error", JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Error en Java: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void mostrarCapas() {
         try {
-            String carpetaCapas = "capas_out";
-            ProcessBuilder pb = new ProcessBuilder(PYTHON_PATH, BRIDGE_PATH, "separar_capas", rutaImagenOriginal, carpetaCapas);
+            String rutaOrigenAbs = normalizarRuta(rutaImagenOriginal);
+            String carpetaCapas = normalizarRuta("capas_out");
+
+            ProcessBuilder pb = new ProcessBuilder(PYTHON_PATH, BRIDGE_PATH, "separar_capas", rutaOrigenAbs, carpetaCapas);
             Process p = pb.start();
+
             BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            BufferedReader errorReader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+
             String respuesta = reader.readLine();
 
             if (respuesta != null && respuesta.contains("\"status\": \"ok\"")) {
@@ -140,6 +178,9 @@ public class ProcessFrame extends JFrame {
                     frameCapas.add(lbl);
                 }
                 frameCapas.setVisible(true);
+            } else {
+                String errLine = errorReader.readLine();
+                JOptionPane.showMessageDialog(this, "Error al generar capas: " + (errLine != null ? errLine : "Error desconocido"), "Error", JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error al generar capas: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);

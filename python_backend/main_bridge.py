@@ -1,118 +1,103 @@
 import sys
-import os
-import cv2
 import json
-from database_handler import registrar_usuario, validar_login, guardar_imagen_pixeles
-from procesador import (
-    convertir_grises_formula,
-    aplicar_gamma,
-    aplicar_negativo,
-    ecualizar_histograma,
-    segmentar_color_hsv,
-    generar_separacion_capas,
-    capturar_foto_camara
-)
+import os
+
+# Asegurar que reconozca el directorio backend
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    import database_handler as db
+    import procesador as proc
+except Exception as e:
+    print(json.dumps({"status": "error", "message": f"Error importando módulos: {str(e)}"}))
+    sys.exit(1)
 
 def main():
     if len(sys.argv) < 2:
-        print(json.dumps({"status": "error", "message": "No se proporcionó ningún comando"}))
+        print(json.dumps({"status": "error", "message": "Faltan argumentos"}))
         return
 
     comando = sys.argv[1]
 
-    # 1. Comandos de Usuario / Login
-    if comando == "registrar":
-        # Argumentos: comando, nombre, ap_pat, ap_mat, usuario, contrasena
-        if len(sys.argv) >= 7:
-            exito = registrar_usuario(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6])
-            print(json.dumps({"status": "ok" if exito else "error"}))
-        else:
-            print(json.dumps({"status": "error", "message": "Faltan datos de registro"}))
+    try:
+        # 1. REGISTRO
+        if comando == "registrar" and len(sys.argv) >= 4:
+            usr, pwd = sys.argv[2], sys.argv[3]
+            res = db.registrar_usuario(usr, pwd)
+            if res:
+                print(json.dumps({"status": "ok", "message": "Registrado"}))
+            else:
+                print(json.dumps({"status": "error", "message": "Usuario existente"}))
 
-    elif comando == "login":
-        # Argumentos: comando, usuario, contrasena
-        if len(sys.argv) >= 4:
-            exito = validar_login(sys.argv[2], sys.argv[3])
-            print(json.dumps({"status": "ok" if exito else "error"}))
-        else:
-            print(json.dumps({"status": "error", "message": "Faltan credenciales"}))
+        # 2. LOGIN
+        elif comando == "login" and len(sys.argv) >= 4:
+            usr, pwd = sys.argv[2], sys.argv[3]
+            res = db.validar_login(usr, pwd)
+            if res:
+                print(json.dumps({"status": "ok", "message": "Login exitoso"}))
+            else:
+                print(json.dumps({"status": "error", "message": "Credenciales incorrectas"}))
 
-    # 2. Comando para Captura de Foto de Cámara Web
-    elif comando == "capturar_foto":
-        # Argumentos: comando, ruta_salida
-        ruta_salida = sys.argv[2] if len(sys.argv) >= 3 else "captura_temp.jpg"
-        exito = capturar_foto_camara(ruta_salida)
-        print(json.dumps({"status": "ok" if exito else "error", "ruta": ruta_salida}))
+        # 3. CAPTURAR FOTO CÁMARA
+        elif comando == "capturar_foto" and len(sys.argv) >= 3:
+            ruta_salida = sys.argv[2]
+            res = proc.capturar_foto_camara(ruta_salida)
+            if res:
+                print(json.dumps({"status": "ok", "message": "Foto capturada"}))
+            else:
+                print(json.dumps({"status": "error", "message": "Error al abrir cámara"}))
 
-    # 3. Comandos de Procesamiento de Visión Artificial
-    elif comando == "procesar":
-        # Argumentos: comando, ruta_entrada, tipo_proceso, ruta_salida, [parametro_extra]
-        if len(sys.argv) < 5:
-            print(json.dumps({"status": "error", "message": "Faltan parametros de procesamiento"}))
-            return
+        # 4. PROCESAR FILTRO (GRISES, GAMMA, NEGATIVO, HISTOGRAMA, HSV)
+        elif comando == "procesar" and len(sys.argv) >= 5:
+            ruta_in = sys.argv[2]
+            filtro = sys.argv[3]
+            ruta_out = sys.argv[4]
+            gamma_val = float(sys.argv[5]) if len(sys.argv) >= 6 else 1.0
 
-        ruta_in = sys.argv[2]
-        tipo = sys.argv[3]
-        ruta_out = sys.argv[4]
+            if filtro == "Grises":
+                res = proc.convertir_grises_formula(ruta_in, ruta_out)
+            elif filtro == "Gamma":
+                res = proc.aplicar_gamma(ruta_in, ruta_out, gamma_val)
+            elif filtro == "Negativo":
+                res = proc.aplicar_negativo(ruta_in, ruta_out)
+            elif filtro == "Histograma":
+                res = proc.ecualizar_histograma(ruta_in, ruta_out)
+            elif filtro in ["SegmentarRojo", "SegmentarVerde", "SegmentarAzul"]:
+                color = filtro.replace("Segmentar", "").lower()
+                res = proc.segmentar_color_hsv(ruta_in, ruta_out, color)
+            else:
+                res = False
 
-        imagen = cv2.imread(ruta_in)
-        if imagen is None:
-            print(json.dumps({"status": "error", "message": "No se pudo leer la imagen"}))
-            return
+            if res:
+                print(json.dumps({"status": "ok", "message": "Procesado correctamente"}))
+            else:
+                print(json.dumps({"status": "error", "message": "Fallo al procesar imagen en OpenCV"}))
 
-        img_resultado = None
+        # 5. GUARDAR MATRIZ EN BASE DE DATOS
+        elif comando == "guardar_bd" and len(sys.argv) >= 4:
+            ruta_img = sys.argv[2]
+            tipo_filtro = sys.argv[3]
+            res = db.guardar_imagen_pixeles(ruta_img, tipo_filtro)
+            if res:
+                print(json.dumps({"status": "ok", "message": "Guardado en BD"}))
+            else:
+                print(json.dumps({"status": "error", "message": "Fallo al guardar matriz"}))
 
-        if tipo == "Grises":
-            img_resultado = convertir_grises_formula(imagen)
-        elif tipo == "Gamma":
-            gamma_val = float(sys.argv[5]) if len(sys.argv) >= 6 else 0.8
-            img_resultado = aplicar_gamma(imagen, gamma=gamma_val)
-        elif tipo == "Negativo":
-            img_resultado = aplicar_negativo(imagen)
-        elif tipo == "Histograma":
-            img_resultado = ecualizar_histograma(imagen)
-        elif tipo == "SegmentarRojo":
-            img_resultado = segmentar_color_hsv(imagen, 'Rojo')
-        elif tipo == "SegmentarVerde":
-            img_resultado = segmentar_color_hsv(imagen, 'Verde')
-        elif tipo == "SegmentarAzul":
-            img_resultado = segmentar_color_hsv(imagen, 'Azul')
-        else:
-            img_resultado = imagen
-
-        cv2.imwrite(ruta_out, img_resultado)
-        print(json.dumps({"status": "ok", "ruta_resultado": ruta_out}))
-
-    # 4. Guardado final de Matriz de Píxeles en la Base de Datos
-    elif comando == "guardar_bd":
-        # Argumentos: comando, ruta_imagen, tipo_proceso
-        if len(sys.argv) >= 4:
-            exito = guardar_imagen_pixeles(sys.argv[2], sys.argv[3])
-            print(json.dumps({"status": "ok" if exito else "error"}))
-        else:
-            print(json.dumps({"status": "error", "message": "Faltan parametros para guardar en BD"}))
-
-    # 5. Generar Separación de Capas (R, G, B, M, Y, C)
-    elif comando == "separar_capas":
-        # Argumentos: comando, ruta_imagen, carpeta_destino
-        if len(sys.argv) >= 4:
+        # 6. SEPARACIÓN DE CAPAS
+        elif comando == "separar_capas" and len(sys.argv) >= 4:
             ruta_in = sys.argv[2]
             carpeta_out = sys.argv[3]
-            os.makedirs(carpeta_out, exist_ok=True)
-            
-            imagen = cv2.imread(ruta_in)
-            if imagen is not None:
-                capas = generar_separacion_capas(imagen)
-                rutas_capas = {}
-                for nombre_capa, img_capa in capas.items():
-                    r_out = os.path.join(carpeta_out, f"capa_{nombre_capa}.jpg")
-                    cv2.imwrite(r_out, img_capa)
-                    rutas_capas[nombre_capa] = r_out
-                print(json.dumps({"status": "ok", "capas": rutas_capas}))
+            res = proc.generar_separacion_capas(ruta_in, carpeta_out)
+            if res:
+                print(json.dumps({"status": "ok", "message": "Capas separadas"}))
             else:
-                print(json.dumps({"status": "error", "message": "No se pudo leer la imagen"}))
+                print(json.dumps({"status": "error", "message": "Fallo al generar capas"}))
+
         else:
-            print(json.dumps({"status": "error", "message": "Faltan parametros para separacion de capas"}))
+            print(json.dumps({"status": "error", "message": f"Comando desconocido o faltan argumentos: {comando}"}))
+
+    except Exception as ex:
+        print(json.dumps({"status": "error", "message": f"Excepción en Python: {str(ex)}"}))
 
 if __name__ == "__main__":
     main()
