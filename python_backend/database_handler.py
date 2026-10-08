@@ -23,7 +23,7 @@ def inicializar_bd():
             contrasena TEXT NOT NULL
         )
     ''')
-    
+
     # Tabla de imágenes con arreglo de píxeles en formato JSON
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS imagenes_procesadas (
@@ -52,7 +52,7 @@ def registrar_usuario(nombre, ap_pat, ap_mat, usuario, contrasena):
         conn.close()
         return True
     except sqlite3.IntegrityError:
-        return False  # El nombre de usuario ya existe
+        return False
 
 def validar_login(usuario, contrasena):
     
@@ -80,7 +80,7 @@ def guardar_imagen_pixeles(ruta_o_matriz, tipo_proceso="Original"):
     
     alto, ancho, _ = imagen_rgb.shape
     
-    # Aplanar la matriz a una lista de listas [[R, G, B], [R, G, B], ...]
+    # Aplanar la matriz a una lista de listas [[R, G, B], [R, G, B]
     pixeles_lista = imagen_rgb.reshape(-1, 3).tolist()
     
     # Convertir a cadena de texto formato JSON
@@ -98,6 +98,5 @@ def guardar_imagen_pixeles(ruta_o_matriz, tipo_proceso="Original"):
     return True
 
 if __name__ == "__main__":
-    # Inicializar la base de datos al ejecutar directamente este script
     inicializar_bd()
     print("Base de datos inicializada correctamente.")
